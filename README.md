@@ -15,7 +15,11 @@ Anonymous submission for CVPR 2024, paper ID 532.
 
 Disclaimer
 ------------------
-For the ScanMatch evaluation metric, we adopt the part of [`GazeParser`](http://gazeparser.sourceforge.net/) package.  We adopt the implementation of SED and STDE from [`VAME`](https://github.com/dariozanca/VAME) as two of our evaluation metrics mentioned in the [`Visual Attention Models`](https://ieeexplore.ieee.org/document/9207438). Based on the [`checkpoint`](https://github.com/nocaps-org/updown-baseline/blob/master/updown/utils/checkpointing.py) implementation from [`updown-baseline`](https://github.com/nocaps-org/updown-baseline), we slightly modify it to accommodate our pipeline.
+For the ScanMatch evaluation metric, we adopt the part of [`GazeParser`](http://gazeparser.sourceforge.net/) package. 
+We adopt the implementation of SED and STDE from [`VAME`](https://github.com/dariozanca/VAME) as two of our evaluation metrics mentioned in the [`Visual Attention Models`](https://ieeexplore.ieee.org/document/9207438). 
+More specific, we adopt the evaluation metrics provided in [`Scanpath`](https://github.com/chenxy99/Scanpaths).
+For ChemLSTM and Gazeformer, we adopt the released code in [`Scanpath`](https://github.com/chenxy99/Scanpaths) and [`Gazeformer`](https://github.com/cvlab-stonybrook/Gazeformer), respectively.
+Based on the [`checkpoint`](https://github.com/nocaps-org/updown-baseline/blob/master/updown/utils/checkpointing.py) implementation from [`updown-baseline`](https://github.com/nocaps-org/updown-baseline), we slightly modify it to accommodate our pipeline.
 
 Requirements
 ------------------
@@ -23,10 +27,10 @@ Requirements
 - Python 3.9
 - PyTorch 1.12.1 (along with torchvision)
 
-- We also provide the conda environment ``sp_baseline.yml``, you can directly run
+- We also provide the conda environment ``user_scanpath.yml``, you can directly run
 
 ```bash
-$ conda env create -f sp_baseline.yml
+$ conda env create -f user_scanpath.yml
 ```
 
 to create the same environment where we successfully run our codes.
