@@ -1,4 +1,4 @@
-# IndividualScanpath
+# Beyond Average: Individualized Visual Scanpath Prediction
 
 This code implements the prediction of individualized visual scanpath in three different tasks (4 different datasets) with two different architecture:
 
