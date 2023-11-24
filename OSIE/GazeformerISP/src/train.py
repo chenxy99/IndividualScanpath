@@ -28,19 +28,7 @@ from utils.evaltools.scanmatch import ScanMatch
 from models.sampling import Sampling
 
 from models.models import Transformer
-from models.gazeformer_baseline import gazeformer
-
-# encoder_decoder
-# from models.subject_encoder_decoder_models import Transformer
-# from models.gazeformer_subject_encoder_decoder import gazeformer
-
-# encoder
-# from models.subject_encoder_models import Transformer
-# from models.gazeformer_subject_encoder import gazeformer
-
-# decoder
-# from models.subject_decoder_models import Transformer
-# from models.gazeformer_subject_decoder import gazeformer
+from models.gazeformer import gazeformer
 
 args = parse_opt()
 
@@ -93,9 +81,6 @@ def main():
     train_dataset = OSIE(args.img_dir, args.feat_dir, args.fix_dir, action_map=(args.im_h, args.im_w),
                          resize=(args.height, args.width), origin_size=(args.origin_height, args.origin_width),
                          blur_sigma=args.blur_sigma, type="train", transform=transform, max_length=args.max_length)
-    # train_dataset = COCOSearch_by_subject(args.img_dir, args.feat_dir, args.fix_dir, action_map=(args.im_h, args.im_w),
-    #                      resize=(args.height, args.width), origin_size=(args.origin_height, args.origin_width),
-    #                      blur_sigma=args.blur_sigma, type="train", transform=transform, max_length=args.max_length)
     train_dataset_rl = OSIE_rl(args.img_dir, args.feat_dir, args.fix_dir, action_map=(args.im_h, args.im_w),
                                                origin_size = (args.origin_height, args.origin_width),
                                                resize=(args.height, args.width), type="train", transform=transform)
@@ -139,40 +124,10 @@ def main():
                      action_map_num=args.action_map_num,
                      dropout=args.cls_dropout, max_len=args.max_length).cuda()
 
-
-    # encoder + decoder /encoder
-    # transformer = Transformer(num_encoder_layers=args.num_encoder, nhead=args.nhead,
-    #                           subject_feature_dim=args.subject_feature_dim, d_model=args.hidden_dim,
-    #                           num_decoder_layers=args.num_decoder, encoder_dropout=args.encoder_dropout,
-    #                           decoder_dropout=args.decoder_dropout, dim_feedforward=args.hidden_dim,
-    #                           img_hidden_dim=args.img_hidden_dim, lm_dmodel=args.lm_hidden_dim, device=device, args=args).cuda()
-    #
-    # model = gazeformer(transformer, spatial_dim=(args.im_h, args.im_w), args=args,
-    #                    subject_num=args.subject_num, subject_feature_dim=args.subject_feature_dim,
-    #                    action_map_num=args.action_map_num,
-    #                    dropout=args.cls_dropout, max_len=args.max_length).cuda()
-
-    # decoder
-    # transformer = Transformer(num_encoder_layers=args.num_encoder, nhead=args.nhead,
-    #                           d_model=args.hidden_dim,
-    #                           num_decoder_layers=args.num_decoder, encoder_dropout=args.encoder_dropout,
-    #                           decoder_dropout=args.decoder_dropout, dim_feedforward=args.hidden_dim,
-    #                           img_hidden_dim=args.img_hidden_dim, lm_dmodel=args.lm_hidden_dim, device=device, args=args).cuda()
-    #
-    # model = gazeformer(transformer, spatial_dim=(args.im_h, args.im_w), args=args,
-    #                    subject_num=args.subject_num, subject_feature_dim=args.subject_feature_dim,
-    #                    action_map_num=args.action_map_num,
-    #                    dropout=args.cls_dropout, max_len=args.max_length).cuda()
-
     sampling = Sampling(convLSTM_length=args.max_length, min_length=args.min_length,
                         map_width=args.im_w, map_height=args.im_h,
                         width=args.width, height=args.height)
 
-    # optimizer = torch.optim.AdamW([
-    #     {'params': head_params, 'lr': args.head_lr},
-    #     {'params': belly_params, 'lr': args.belly_lr},
-    #     {'params': tail_params, 'lr': args.tail_lr},
-    # ], betas=(0.9, 0.98), eps=1e-9, weight_decay=args.weight_decay)
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.98),
                            eps=1e-09, weight_decay=args.weight_decay)
 
@@ -230,11 +185,6 @@ def main():
     if len(args.gpu_ids) > 1:
         model = nn.DataParallel(model, args.gpu_ids)
 
-    # loss_fn_token = torch.nn.NLLLoss()
-    # loss_fn_y = nn.L1Loss(reduction='none')
-    # loss_fn_x = nn.L1Loss(reduction='none')
-    # loss_fn_t = nn.L1Loss(reduction='none')
-
     def train(iteration, epoch):
         # traditional training stage
         if epoch < args.start_rl_epoch:
@@ -270,9 +220,6 @@ def main():
                     tensorboard_writer.add_scalar("loss/loss_actions", loss_actions, iteration)
                     tensorboard_writer.add_scalar("loss/loss_duration", loss_duration, iteration)
                     tensorboard_writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], iteration)
-                    # tensorboard_writer.add_scalar("lr/head_learning_rate", optimizer.param_groups[0]["lr"], iteration)
-                    # tensorboard_writer.add_scalar("lr/belly_learning_rate", optimizer.param_groups[1]["lr"], iteration)
-                    # tensorboard_writer.add_scalar("lr/tail_learning_rate", optimizer.param_groups[2]["lr"], iteration)
 
         # reinforcement learning stage
         else:
@@ -432,23 +379,6 @@ def main():
 
         return cur_metrics
 
-
-    # get the human baseline score
-    # human_metrics, human_metrics_std, _ = human_evaluation_by_subject(validation_loader)
-    # logger.info("-" * 50)
-    # logger.info("The metrics for human performance are: ")
-    # for metrics_key in human_metrics.keys():
-    #     for (key, value) in human_metrics[metrics_key].items():
-    #         logger.info("{metrics_key:10}-{key:15}: {value:.4f} +- {std:.4f}".format
-    #                     (metrics_key=metrics_key, key=key, value=value, std=human_metrics_std[metrics_key][key]))
-
-    # human_metrics, human_metrics_std, _ = human_evaluation(validation_loader)
-    # logger.info("-" * 50)
-    # logger.info("The metrics for human performance are: ")
-    # for metrics_key in human_metrics.keys():
-    #     for (key, value) in human_metrics[metrics_key].items():
-    #         logger.info("{metrics_key:10}-{key:15}: {value:.4f} +- {std:.4f}".format
-    #                     (metrics_key=metrics_key, key=key, value=value, std=human_metrics_std[metrics_key][key]))
     for epoch in range(start_epoch + 1, args.epoch):
         logger.info("-" * 50)
         logger.info("Running the {epoch:2d}-th epoch...".format(epoch=epoch))

@@ -140,6 +140,9 @@ def main():
     # best performing checkpoint.
     checkpoint_manager = CheckpointManager(model, optimizer, checkpoints_dir, mode="max", best_metric=best_metric)
 
+    # Load checkpoint to resume training from there if specified.
+    # Infer iteration number through file name (it's hacky but very simple), so don't rename
+    # saved checkpoints if you intend to continue training.
     if args.resume_dir != "":
         training_checkpoint = torch.load(os.path.join(checkpoints_dir, "checkpoint.pth"))
         for key in training_checkpoint:

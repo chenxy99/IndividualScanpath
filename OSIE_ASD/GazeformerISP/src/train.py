@@ -7,7 +7,6 @@ from torchvision import transforms
 
 import numpy as np
 import scipy.stats
-import random
 
 import time
 import os
@@ -18,9 +17,8 @@ import datetime
 import json
 
 from dataset.dataset import OSIE, OSIE_evaluation, OSIE_rl
-from models.baseline_attention import baseline
 from models.loss import CrossEntropyLoss, DurationSmoothL1Loss, MLPRayleighDistribution, MLPLogNormalDistribution, \
-    LogAction, LogDuration, NSS, CC, KLD
+    LogAction, LogDuration, NSS, CC, KLD, CrossEntropyProbLoss
 from utils.checkpointing import CheckpointManager
 from utils.recording import RecordManager
 from utils.evaluation import pairs_eval, comprehensive_evaluation_by_subject
@@ -28,6 +26,9 @@ from utils.logger import Logger
 from opts import parse_opt
 from utils.evaltools.scanmatch import ScanMatch
 from models.sampling import Sampling
+
+from models.models import Transformer
+from models.gazeformer import gazeformer
 
 args = parse_opt()
 
@@ -40,7 +41,7 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 transform = transforms.Compose([
-                                transforms.Resize((args.height, args.width)),
+                                transforms.Resize((args.height * 2, args.width * 2)),
                                 transforms.ToTensor(),
                                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
                                 ])
@@ -77,13 +78,15 @@ def main():
     #   INSTANTIATE VOCABULARY, DATALOADER, MODEL, OPTIMIZER
     # --------------------------------------------------------------------------------------------
 
-    train_dataset = OSIE(args.img_dir, args.fix_dir, action_map=(args.map_height, args.map_width),
-                         resize=(args.height, args.width),
-                         blur_sigma=args.blur_sigma, type="train", transform=transform)
-    train_dataset_rl = OSIE_rl(args.img_dir, args.fix_dir, action_map=(args.map_height, args.map_width),
-                         resize=(args.height, args.width), type="train", transform=transform)
-    validation_dataset = OSIE_evaluation(args.img_dir, args.fix_dir, action_map=(args.map_height, args.map_width),
-                         resize=(args.height, args.width), type="validation", transform=transform)
+    train_dataset = OSIE(args.img_dir, args.feat_dir, args.fix_dir, action_map=(args.im_h, args.im_w),
+                         resize=(args.height, args.width), origin_size=(args.origin_height, args.origin_width),
+                         blur_sigma=args.blur_sigma, type="train", transform=transform, max_length=args.max_length)
+    train_dataset_rl = OSIE_rl(args.img_dir, args.feat_dir, args.fix_dir, action_map=(args.im_h, args.im_w),
+                                               origin_size = (args.origin_height, args.origin_width),
+                                               resize=(args.height, args.width), type="train", transform=transform)
+    validation_dataset = OSIE_evaluation(args.img_dir, args.feat_dir, args.fix_dir, action_map=(args.im_h, args.im_w),
+                                               origin_size = (args.origin_height, args.origin_width),
+                                               resize=(args.height, args.width), type="validation", transform=transform)
 
     train_loader = DataLoader(
         dataset=train_dataset,
@@ -101,22 +104,31 @@ def main():
     )
     validation_loader = DataLoader(
         dataset=validation_dataset,
-        batch_size=args.batch,
+        batch_size=args.test_batch,
         shuffle=False,
         num_workers=4,
         collate_fn=validation_dataset.collate_func
     )
 
-    model = baseline(embed_size=512, convLSTM_length=args.max_length, min_length=args.min_length, dropout=args.dropout,
-                     subject_num=args.subject_num, map_width=args.map_width, map_height=args.map_height, embedding_dim=args.embedding_dim, action_map_num=args.action_map_num).cuda()
+    device = torch.device('cuda:{}'.format(args.cuda))
+
+    transformer = Transformer(num_encoder_layers=args.num_encoder, nhead=args.nhead,
+                              subject_feature_dim=args.subject_feature_dim, d_model=args.hidden_dim,
+                              num_decoder_layers=args.num_decoder, encoder_dropout=args.encoder_dropout,
+                              decoder_dropout=args.decoder_dropout, dim_feedforward=args.hidden_dim,
+                              img_hidden_dim=args.img_hidden_dim, lm_dmodel=args.lm_hidden_dim, device=device, args=args).cuda()
+
+    model = gazeformer(transformer, spatial_dim=(args.im_h, args.im_w), args=args,
+                       subject_num=args.subject_num, subject_feature_dim=args.subject_feature_dim,
+                       action_map_num=args.action_map_num,
+                       dropout=args.cls_dropout, max_len=args.max_length).cuda()
 
     sampling = Sampling(convLSTM_length=args.max_length, min_length=args.min_length,
-                        map_width=args.map_width, map_height=args.map_height,
+                        map_width=args.im_w, map_height=args.im_h,
                         width=args.width, height=args.height)
 
-    # optimizer = optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=args.weight_decay, nesterov=True)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999),
-                           eps=1e-08, weight_decay=args.weight_decay)
+    optimizer = optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.98),
+                           eps=1e-09, weight_decay=args.weight_decay)
 
     # --------------------------------------------------------------------------------------------
     #  BEFORE TRAINING STARTS
@@ -140,6 +152,9 @@ def main():
     # best performing checkpoint.
     checkpoint_manager = CheckpointManager(model, optimizer, checkpoints_dir, mode="max", best_metric=best_metric)
 
+    # Load checkpoint to resume training from there if specified.
+    # Infer iteration number through file name (it's hacky but very simple), so don't rename
+    # saved checkpoints if you intend to continue training.
     if args.resume_dir != "":
         training_checkpoint = torch.load(os.path.join(checkpoints_dir, "checkpoint.pth"))
         for key in training_checkpoint:
@@ -147,6 +162,8 @@ def main():
                 optimizer.load_state_dict(training_checkpoint[key])
             else:
                 model.load_state_dict(training_checkpoint[key])
+
+        del training_checkpoint
 
     # lr_scheduler = optim.lr_scheduler.LambdaLR \
     #     (optimizer, lr_lambda=lambda iteration: 1 - iteration / (len(train_loader) * args.epoch), last_epoch=iteration)
@@ -156,7 +173,7 @@ def main():
             return iteration / (len(train_loader) * args.warmup_epoch)
         elif iteration <= len(train_loader) * args.start_rl_epoch:
             return 1 - (iteration - len(train_loader) * args.warmup_epoch) / \
-                   (len(train_loader) * (args.start_rl_epoch - args.warmup_epoch))
+                (len(train_loader) * (args.start_rl_epoch - args.warmup_epoch))
         else:
             return args.rl_lr_initial_decay * (1 - (iteration - (len(train_loader) * args.start_rl_epoch)) /
                                                (len(train_rl_loader) * (args.epoch - args.start_rl_epoch)))
@@ -167,22 +184,29 @@ def main():
     if len(args.gpu_ids) > 1:
         model = nn.DataParallel(model, args.gpu_ids)
 
+    # loss_fn_token = torch.nn.NLLLoss()
+    # loss_fn_y = nn.L1Loss(reduction='none')
+    # loss_fn_x = nn.L1Loss(reduction='none')
+    # loss_fn_t = nn.L1Loss(reduction='none')
+
     def train(iteration, epoch):
         # traditional training stage
         if epoch < args.start_rl_epoch:
             model.train()
             with tqdm(total=len(train_loader)) as pbar:
                 for i_batch, batch in enumerate(train_loader):
-                    tmp = [batch["images"], batch["scanpaths"], batch["durations"],
-                           batch["action_masks"], batch["duration_masks"], batch["subjects"]]
+                    tmp = [batch["images"], batch["subjects"], batch["durations"], batch["action_masks"],
+                           batch["duration_masks"], batch["task_embeddings"], batch["target_scanpaths"]]
                     tmp = [_ if _ is None else _.cuda() for _ in tmp]
                     tmp = [_.view(-1, *_.shape[2:]) for _ in tmp]
-                    images, scanpaths, durations, action_masks, duration_masks, subjects = tmp
+
+                    images, subjects, durations, action_masks, duration_masks, task_embeddings, target_scanpaths = tmp
+
 
                     optimizer.zero_grad()
-                    predicts = model(images, subjects)
+                    predicts = model(src = images, subjects=subjects, task=task_embeddings)
 
-                    loss_actions = CrossEntropyLoss(predicts["actions"], scanpaths, action_masks)
+                    loss_actions = CrossEntropyLoss(predicts["actions"], target_scanpaths, action_masks)
                     loss_duration = MLPLogNormalDistribution(predicts["log_normal_mu"], predicts["log_normal_sigma2"],
                                                              durations, duration_masks)
                     loss = loss_actions + args.lambda_1 * loss_duration
@@ -200,26 +224,29 @@ def main():
                     tensorboard_writer.add_scalar("loss/loss_actions", loss_actions, iteration)
                     tensorboard_writer.add_scalar("loss/loss_duration", loss_duration, iteration)
                     tensorboard_writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], iteration)
+
+
         # reinforcement learning stage
         else:
             model.eval()
             # create a ScanMatch object
-            ScanMatchwithDuration = ScanMatch(Xres=args.width, Yres=args.height, Xbin=16, Ybin=12, Offset=(0, 0), TempBin=50,
-                                              Threshold=3.5)
-            ScanMatchwithoutDuration = ScanMatch(Xres=args.width, Yres=args.height, Xbin=16, Ybin=12, Offset=(0, 0), Threshold=3.5)
+            ScanMatchwithDuration = ScanMatch(Xres=args.width, Yres=args.height, Xbin=16, Ybin=12, Offset=(0, 0),
+                                              TempBin=50, Threshold=3.5)
+            ScanMatchwithoutDuration = ScanMatch(Xres=args.width, Yres=args.height, Xbin=16, Ybin=12, Offset=(0, 0),
+                                                 Threshold=3.5)
             with tqdm(total=len(train_rl_loader)) as pbar:
                 for i_batch, batch in enumerate(train_rl_loader):
-                    tmp = [batch["images"], batch["fix_vectors"], batch["subjects"]]
+                    tmp = [batch["images"], batch["fix_vectors"], batch["task_embeddings"], batch["subjects"]]
                     tmp = [_ if not torch.is_tensor(_) else _.cuda() for _ in tmp]
-
                     # merge the first two dim
                     tmp = [_.view(-1, *_.shape[2:]) if torch.is_tensor(_) else _ for _ in tmp]
-                    images, tmp_gt_fix_vectors, subjects = tmp
+                    images, tmp_gt_fix_vectors, task_embeddings, subjects = tmp
+
                     gt_fix_vectors = []
                     for _ in tmp_gt_fix_vectors:
                         gt_fix_vectors.extend(_)
 
-                    N, C, H, W = images.shape
+                    N, _, C = images.shape
 
                     optimizer.zero_grad()
 
@@ -227,7 +254,7 @@ def main():
                     neg_log_actions_batch = []
                     neg_log_durations_batch = []
 
-                    predict = model(images, subjects)
+                    predict = model(src=images, subjects=subjects, task=task_embeddings)
 
                     log_normal_mu = predict["log_normal_mu"]
                     log_normal_sigma2 = predict["log_normal_sigma2"]
@@ -248,7 +275,7 @@ def main():
                         # it needs to be clip since sometime it will be inf
                         t = torch.clip(t, 0, 100)
                         metrics_reward = pairs_eval(gt_fix_vectors, random_predict_fix_vectors,
-                                                              ScanMatchwithDuration, ScanMatchwithoutDuration)
+                                                    ScanMatchwithDuration, ScanMatchwithoutDuration)
 
                         if np.any(np.isnan(metrics_reward)):
                             continue
@@ -266,11 +293,14 @@ def main():
                     # use the mean as reward
                     metrics_reward_tensor = torch.cat(metrics_reward_batch, dim=0)
                     metrics_reward_hmean = scipy.stats.hmean(metrics_reward_tensor[:, :, 5:7].cpu(), axis=-1)
-                    metrics_reward_hmean_tensor = torch.tensor(metrics_reward_hmean).to(metrics_reward_tensor.get_device())
+                    metrics_reward_hmean_tensor = torch.tensor(metrics_reward_hmean).to(
+                        metrics_reward_tensor.get_device())
                     baseline_reward_hmean_tensor = metrics_reward_hmean_tensor.mean(0, keepdim=True)
 
-                    loss_actions = (neg_log_actions_tensor * (metrics_reward_hmean_tensor - baseline_reward_hmean_tensor)).sum()
-                    loss_duration = (neg_log_durations_tensor * (metrics_reward_hmean_tensor - baseline_reward_hmean_tensor)).sum()
+                    loss_actions = (neg_log_actions_tensor * (
+                                metrics_reward_hmean_tensor - baseline_reward_hmean_tensor)).sum()
+                    loss_duration = (neg_log_durations_tensor * (
+                                metrics_reward_hmean_tensor - baseline_reward_hmean_tensor)).sum()
                     loss = loss_actions + loss_duration
 
                     loss.backward()
@@ -291,7 +321,8 @@ def main():
                     tensorboard_writer.add_scalar("learning_rate", optimizer.param_groups[0]["lr"], iteration)
                     for metric_index in range(len(multimatch_metric_names)):
                         tensorboard_writer.add_scalar(
-                            "metrics_for_reward/{metric_name}".format(metric_name=multimatch_metric_names[metric_index]),
+                            "metrics_for_reward/{metric_name}".format(
+                                metric_name=multimatch_metric_names[metric_index]),
                             multimatch_metrics_reward[metric_index], iteration
                         )
 
@@ -304,15 +335,16 @@ def main():
         all_predict_fix_vectors = []
         with tqdm(total=len(validation_loader) * repeat_num) as pbar_val:
             for i_batch, batch in enumerate(validation_loader):
-                tmp = [batch["images"], batch["fix_vectors"], batch["subjects"]]
+                tmp = [batch["images"], batch["fix_vectors"], batch["task_embeddings"], batch["subjects"]]
                 tmp = [_ if not torch.is_tensor(_) else _.cuda() for _ in tmp]
                 # merge the first two dim
                 tmp = [_.view(-1, *_.shape[2:]) if torch.is_tensor(_) else _ for _ in tmp]
-                images, gt_fix_vectors, subjects = tmp
-                N, C, H, W = images.shape
+                images, gt_fix_vectors, task_embeddings, subjects = tmp
+
+                N, _, C = images.shape
 
                 with torch.no_grad():
-                    predict = model(images, subjects)
+                    predict = model(src=images, subjects=subjects, task=task_embeddings)
 
                 log_normal_mu = predict["log_normal_mu"]
                 log_normal_sigma2 = predict["log_normal_sigma2"]
@@ -329,7 +361,8 @@ def main():
                         images, prob_sample_actions, durations, sample_actions)
 
                     for idx in range(len(batch["img_names"])):
-                        image_prediction_dict[idx].extend(sampling_random_predict_fix_vectors[idx*args.subject_num:(idx+1)*args.subject_num])
+                        image_prediction_dict[idx].extend(
+                            sampling_random_predict_fix_vectors[idx * args.subject_num:(idx + 1) * args.subject_num])
 
                     pbar_val.update(1)
 
@@ -362,10 +395,13 @@ def main():
             tensorboard_writer.add_scalar("current metric", float(cur_metric), iteration)
             logger.info("{key:10}: {value:.4f}".format(key="current metric", value=float(cur_metric)))
 
-            # save
-            checkpoint_manager.step(float(cur_metric))
-            best_metric = checkpoint_manager.get_best_metric()
-            record_manager.save(epoch, iteration, best_metric)
+        else:
+            cur_metric = -1
+
+        # save
+        checkpoint_manager.step(float(cur_metric))
+        best_metric = checkpoint_manager.get_best_metric()
+        record_manager.save(epoch, iteration, best_metric)
 
         # check  whether to save the final supervised training file
         if args.supervised_save and epoch == args.start_rl_epoch - 1:
