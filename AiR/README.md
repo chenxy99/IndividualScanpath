@@ -1,6 +1,6 @@
 # Individualized Visual Scanpath Prediction in AiR-D Dataset
 
-This code implements the prediction of human scanpaths in visual question-answering task, e.g. AiR-D dataset. 
+This code implements the prediction of human scanpaths in visual question-answering task, e.g., AiR-D dataset. 
 There are two different individualized visual scanpath prediction architectures (e.g., ChenLSTM and Gazeformer).
 You can go to the corresponding sub-folder `ChenLSTMISP` and `GazeformerISP` to run the code, respectively.
 

@@ -7,7 +7,7 @@ You can go to the corresponding sub-folder `ChenLSTMISP` and `GazeformerISP` to 
 Datasets
 ------------------
 The description of how to handle the original data is in [`COCO-Search18`](https://sites.google.com/view/cocosearch/home) and [`Gazeformer`](https://github.com/cvlab-stonybrook/Gazeformerguidance). 
-The data split and the bounding box annotations for our implementation and the original implementation of Gazeformer can be downloaded from [`link`](https://github.com/cvlab-stonybrook/Gazeformerguidance). 
+The data split, the bounding box annotations, and the original implementation of Gazeformer can be downloaded from [`link`](https://github.com/cvlab-stonybrook/Gazeformerguidance). 
 The pre-processed object bounding boxes from the object detector is obtained by [`CenterNet`](https://github.com/xingyizhou/CenterNet), and alternatively, you can download it from [`link`](https://drive.google.com/file/d/1f_Ha5ppPKCngARg7_W5AlqvP6Q_N8LRu/view?usp=sharing).
 
 We structure `<dataset_root>` as follows
