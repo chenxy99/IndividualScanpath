@@ -41,7 +41,6 @@ The `train.py` script will dump checkpoints into the folder specified by `--log_
 - `--att_dir` Directory to the attention maps, e.g., `<dataset_root>/attention_reasoning`.
 - `--epoch` The number of total epochs.
 - `--start_rl_epoch` Start to use reinforcement learning when reaching this given epoch.
-- `--supervised_save` The default parameter is `True`. It can save a whole checkpoint before we start to use reinforcement learning to train our model. The saved checkpoint can be treated as an ablation study of self-critical sequential training. We would add `_supervised_save` as a suffix for the checkpoint document.
 - `--subject_num` The number of different subject in the dataset.
 - `--action_map_num` The hyper-parameter to determine the number of the maps that combine to the action map.
 
