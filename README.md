@@ -10,7 +10,12 @@ Reference
 ------------------
 If you use our code or data, please cite our paper:
 ```text
-Anonymous submission for CVPR 2024, paper ID 532.
+@InProceedings{xianyu:2024:individualscanpath,
+    author={Xianyu Chen and Ming Jiang and Qi Zhao},
+    title = {Beyond Average: Individualized Visual Scanpath Prediction},
+    booktitle = {Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR)},
+    year = {2024}
+}
 ```
 
 Disclaimer
@@ -45,4 +50,4 @@ We provide the corresponding codes for the aforementioned four different dataset
 - COCOSearch
 - AiR-D
 
-We would provide more details for these tasks in their corresponding folders.
+More details of these tasks are provided in their corresponding folders.
