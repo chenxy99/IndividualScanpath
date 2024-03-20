@@ -170,7 +170,7 @@ class gazeformer(nn.Module):
 
     def training_process(self, src, subjects, task):
         tgt_input = src.new_zeros((self.max_len, src.size(0), self.hidden_dim)) #Notice that this where we convert target input to zeros
-        # a  = src.detach().cpu().numpy()
+        
         # tgt_input[0, :, :] = self.firstfix_linear(self.queryfix_embed[tgt[:, 0], tgt[:,1], :])
         memory_task, outs = self.transformer(src=src, tgt=tgt_input, tgt_mask= None, tgt_key_padding_mask = None, subjects = self.subject_embed(subjects), task = task,
                                 querypos_embed = self.querypos_embed.weight.unsqueeze(1), patchpos_embed = self.patchpos_embed)
@@ -213,7 +213,7 @@ class gazeformer(nn.Module):
         
     def inference(self, src, subjects, task):
         tgt_input = src.new_zeros((self.max_len, src.size(0), self.hidden_dim)) #Notice that this where we convert target input to zeros
-        # a  = src.detach().cpu().numpy()
+        
         # tgt_input[0, :, :] = self.firstfix_linear(self.queryfix_embed[tgt[:, 0], tgt[:,1], :])
         memory_task, outs = self.transformer(src=src, tgt=tgt_input, tgt_mask= None, tgt_key_padding_mask = None, subjects = self.subject_embed(subjects), task = task,
                                 querypos_embed = self.querypos_embed.weight.unsqueeze(1), patchpos_embed = self.patchpos_embed)

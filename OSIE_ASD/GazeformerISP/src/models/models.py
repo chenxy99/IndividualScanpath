@@ -185,7 +185,7 @@ class Transformer(nn.Module):
         encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm).to(device)
         input_proj = nn.Linear(img_hidden_dim, d_model).to(device)
         img_transform = nn.Linear(d_model, d_model).to(device)
-        # subject_transform = nn.Linear(subject_feature_dim, d_model).to(device)
+
         text_transform = nn.Linear(lm_dmodel, d_model).to(device)
         attention_module = AttentionModule(d_model, d_model, d_model // 2)
         self.encoder =  TransformerEncoderWrapper(encoder, input_proj, img_transform, text_transform, attention_module, encoder_dropout, device).to(device)
@@ -235,14 +235,14 @@ class TransformerEncoderWrapper(nn.Module):
         self.encoder = encoder.to(device)
         self.input_proj = input_proj.to(device)
         self.img_transform = img_transform.to(device)
-        # self.subject_transform = subject_transform.to(device)
+        
         self.text_transform = text_transform.to(device)
         self.attention_module = attention_module.to(device)
         self.dropout = nn.Dropout(dropout)
         self._reset_parameters(self.encoder)
         self._reset_parameters(self.input_proj)
         self._reset_parameters(self.img_transform)
-        # self._reset_parameters(self.subject_transform)
+        
         self._reset_parameters(self.text_transform)
         self._reset_parameters(self.attention_module)
             
@@ -264,10 +264,7 @@ class TransformerEncoderWrapper(nn.Module):
 
         img_feature = memory.permute(1,0,2)
         visual_att = self.attention_module(img_feature, task_emb)
-        # subjects_emb = self.subject_transform(subjects)  # project subject features to multimodal space
-        # task_emb = self.text_transform(task)#project task features to multimodal space
-
-        # emb = torch.cat([subjects_emb, task_emb], dim=-1)
+        
 
         return memory, visual_att
 
@@ -298,9 +295,7 @@ class TransformerDecoderWrapper(nn.Module):
                 memory_key_padding_mask: Optional[Tensor] = None,
                 querypos_embed: Optional[Tensor] = None,
                 patchpos_embed: Optional[Tensor] = None):
-        # vision-semantic joint embedding
-        # memory_subject = self.dropout(
-        #     self.activation(self.linear(torch.cat([memory, emb.unsqueeze(0).repeat(memory.size(0), 1, 1)], dim=-1))))
+        
 
         #decoder
         output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
@@ -363,7 +358,7 @@ class TransformerDecoder(nn.Module):
                            patchpos_embed = patchpos_embed)
             if self.return_intermediate:
                 intermediate.append(self.norm(output))
-            b =  output.detach().cpu().numpy()
+
         if self.norm is not None:
             output = self.norm(output)
             if self.return_intermediate:
