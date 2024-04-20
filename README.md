@@ -43,7 +43,7 @@ to create the same environment where we successfully run our codes.
 Tasks
 ------------------
 
-We provide the corresponding codes for the aforementioned four different datasets.
+We provide the corresponding codes for the aforementioned four different datasets and the [pretrained models](https://drive.google.com/file/d/1WnU6EYsl339gJzD3LpF7TSDC0TPxqDal/view?usp=sharing).
 
 - OSIE
 - OSIE-ASD
