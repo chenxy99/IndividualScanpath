@@ -97,7 +97,7 @@ def main():
 
     proj_subject_embedding = model.object_head.attention_module.proj_subject(subject_embedding).detach().numpy()
 
-    concat = np.concatenate([spatial_subject_embedding, semantic_subject_embedding, proj_subject_embedding], 1)
+    concat = np.concatenate([spatial_subject_embedding, semantic_subject_embedding, head_proj_subject_embedding, proj_subject_embedding], 1)
 
     concat = (concat - concat.mean(0, keepdims=True)) / (concat.std(0, keepdims=True) + 1e-16)
 
