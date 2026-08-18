@@ -1,3 +1,5 @@
+
+
 # Beyond Average: Individualized Visual Scanpath Prediction
 
 This code implements the prediction of individualized visual scanpath in three different tasks (4 different datasets) with two different architecture:
@@ -43,7 +45,7 @@ We provide the corresponding codes for the aforementioned four different dataset
 
 - OSIE
 - OSIE-ASD
-- COCOSearch
+- COCO-Search18
 - AiR-D
 
 More details of these tasks are provided in their corresponding folders.
